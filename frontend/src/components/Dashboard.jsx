@@ -12,6 +12,9 @@ const Dashboard = () => {
   const [analysis, setAnalysis] = useState(null);
   const [searchResults, setSearchResults] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [numQuestions, setNumQuestions] = useState(5);
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [mcqError, setMcqError] = useState('');
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -19,7 +22,7 @@ const Dashboard = () => {
 
     setIsLoading(true);
     setUploadStatus("");
-    
+
     const formData = new FormData();
     formData.append("file", file);
 
@@ -48,8 +51,13 @@ const Dashboard = () => {
     if (!file) return;
 
     setIsLoading(true);
+    setMcqError('');
+    setMcqs(null);
+    setSelectedAnswers({});
+
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("num_questions", numQuestions.toString());
 
     try {
       const response = await fetch("http://localhost:8000/generate-mcqs", {
@@ -57,15 +65,20 @@ const Dashboard = () => {
         body: formData,
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error("Error generating MCQs");
+        throw new Error(data.detail || "Failed to generate MCQs");
       }
 
-      const data = await response.json();
+      if (!data.mcqs || data.mcqs.length === 0) {
+        throw new Error("No MCQs could be generated from this document");
+      }
+
       setMcqs(data.mcqs);
     } catch (error) {
       console.error("MCQ generation error:", error);
-      setUploadStatus("Error generating MCQs");
+      setMcqError(error.message || "Error generating MCQs");
     } finally {
       setIsLoading(false);
     }
@@ -136,7 +149,7 @@ const Dashboard = () => {
 
         {/* Main Navigation */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card 
+          <Card
             className={`cursor-pointer transition-all ${activeTab === 'upload' ? 'border-blue-500 shadow-lg' : ''}`}
             onClick={() => setActiveTab('upload')}
           >
@@ -147,7 +160,7 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card 
+          <Card
             className={`cursor-pointer transition-all ${activeTab === 'mcq' ? 'border-green-500 shadow-lg' : ''}`}
             onClick={() => setActiveTab('mcq')}
           >
@@ -158,7 +171,7 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card 
+          <Card
             className={`cursor-pointer transition-all ${activeTab === 'analyze' ? 'border-purple-500 shadow-lg' : ''}`}
             onClick={() => setActiveTab('analyze')}
           >
@@ -169,7 +182,7 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card 
+          <Card
             className={`cursor-pointer transition-all ${activeTab === 'search' ? 'border-orange-500 shadow-lg' : ''}`}
             onClick={() => setActiveTab('search')}
           >
@@ -218,27 +231,120 @@ const Dashboard = () => {
                 )}
               </div>
             )}
-            
+
             {activeTab === 'mcq' && (
-              <div className="space-y-4">
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => handleGenerateMCQs(e.target.files[0])}
-                  className="block w-full"
-                />
-                {mcqs && (
-                  <div className="mt-4 space-y-4">
+              <div className="space-y-6">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
+                  <div className="max-w-md mx-auto">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Number of Questions
+                    </label>
+                    <select
+                      className="block w-full rounded-md border-gray-300 shadow-sm p-2 mb-4"
+                      value={numQuestions}
+                      onChange={(e) => setNumQuestions(parseInt(e.target.value))}
+                    >
+                      <option value={5}>5 Questions</option>
+                      <option value={10}>10 Questions</option>
+                      <option value={15}>15 Questions</option>
+                      <option value={20}>20 Questions</option>
+                    </select>
+
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleGenerateMCQs(e.target.files[0])}
+                      className="hidden"
+                      id="mcq-file-upload"
+                    />
+                    <div className="text-center">
+                      <label
+                        htmlFor="mcq-file-upload"
+                        className="cursor-pointer inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                      >
+                        {isLoading ? 'Generating Questions...' : 'Choose PDF & Generate MCQs'}
+                      </label>
+                      <p className="mt-2 text-sm text-gray-600">Select a PDF to generate practice questions</p>
+                    </div>
+                  </div>
+                </div>
+
+                {mcqError && (
+                  <Alert className="bg-red-50">
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{mcqError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {mcqs && mcqs.length > 0 && (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-medium">Practice Questions</h3>
+                      <button
+                        onClick={() => {
+                          setMcqs(null);
+                          setSelectedAnswers({});
+                        }}
+                        className="text-sm text-red-600 hover:text-red-800"
+                      >
+                        Clear Questions
+                      </button>
+                    </div>
+
                     {mcqs.map((mcq, index) => (
-                      <div key={index} className="border rounded p-4">
-                        <p className="font-medium">{mcq.question}</p>
-                        <div className="mt-2 space-y-2">
-                          {mcq.options.map((option, optIndex) => (
-                            <div key={optIndex}>{option}</div>
-                          ))}
+                      <div key={index} className="bg-white rounded-lg border shadow-sm p-6">
+                        <div className="flex justify-between items-start">
+                          <h4 className="text-lg font-medium mb-4">Question {index + 1}</h4>
+                          <span className="text-sm text-gray-500">
+                            {selectedAnswers[index] ? 'Answered' : 'Not answered'}
+                          </span>
                         </div>
-                        <p className="mt-2 text-green-600">Answer: {mcq.correct_answer}</p>
-                        <p className="mt-2 text-gray-600">{mcq.explanation}</p>
+
+                        <p className="text-gray-900 mb-4">{mcq.question}</p>
+
+                        <div className="space-y-3">
+                          {mcq.options.map((option, optIndex) => {
+                            const optionLabel = option.split(')')[0];
+                            return (
+                              <div key={optIndex} className="flex items-start space-x-3">
+                                <input
+                                  type="radio"
+                                  id={`q${index}-opt${optIndex}`}
+                                  name={`question-${index}`}
+                                  value={optionLabel}
+                                  onChange={() => {
+                                    setSelectedAnswers(prev => ({
+                                      ...prev,
+                                      [index]: optionLabel
+                                    }));
+                                  }}
+                                  className="mt-1"
+                                />
+                                <label
+                                  htmlFor={`q${index}-opt${optIndex}`}
+                                  className="text-gray-700 cursor-pointer"
+                                >
+                                  {option}
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {selectedAnswers[index] && (
+                          <div className="mt-4 p-4 rounded-md bg-gray-50">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <span className="font-medium">Correct Answer:</span>
+                              <span className={`px-2 py-1 rounded text-sm ${selectedAnswers[index] === mcq.correct_answer
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                                }`}>
+                                {mcq.correct_answer}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600">{mcq.explanation}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
