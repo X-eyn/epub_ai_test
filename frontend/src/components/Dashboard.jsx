@@ -1,8 +1,9 @@
 // src/components/Dashboard.jsx
 import React, { useState } from "react";
-import { Upload, BookOpen, Search, Brain } from "lucide-react";
+import { Upload, BookOpen, Search, Brain, BookText, Book, HelpCircle, List } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("upload");
@@ -15,6 +16,8 @@ const Dashboard = () => {
   const [numQuestions, setNumQuestions] = useState(5);
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [mcqError, setMcqError] = useState('');
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -86,28 +89,40 @@ const Dashboard = () => {
 
   const handleAnalyzeContent = async (file) => {
     if (!file) return;
-
-    setIsLoading(true);
+  
+    setAnalysisLoading(true);
+    setAnalysisError('');
+    setAnalysis(null);
+    
     const formData = new FormData();
     formData.append("file", file);
-
+  
     try {
+      console.log("Starting analysis of file:", file.name);  // Debug log
+      
       const response = await fetch("http://localhost:8000/analyze-content", {
         method: "POST",
         body: formData,
       });
-
-      if (!response.ok) {
-        throw new Error("Error analyzing content");
-      }
-
+  
       const data = await response.json();
+      console.log("Received data:", data);  // Debug log
+  
+      if (!response.ok) {
+        throw new Error(data.detail || "Error analyzing content");
+      }
+  
+      // Ensure we have the expected data structure
+      if (!data || !data.abstract) {
+        throw new Error("Invalid analysis response format");
+      }
+  
       setAnalysis(data);
     } catch (error) {
       console.error("Analysis error:", error);
-      setUploadStatus("Error analyzing content");
+      setAnalysisError(error.message || "Failed to analyze document");
     } finally {
-      setIsLoading(false);
+      setAnalysisLoading(false);
     }
   };
 
@@ -353,37 +368,105 @@ const Dashboard = () => {
             )}
 
             {activeTab === 'analyze' && (
-              <div className="space-y-4">
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => handleAnalyzeContent(e.target.files[0])}
-                  className="block w-full"
-                />
+              <div className="space-y-6">
+                {/* File Upload Section */}
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => handleAnalyzeContent(e.target.files[0])}
+                    className="hidden"
+                    id="analysis-file-upload"
+                  />
+                  <label
+                    htmlFor="analysis-file-upload"
+                    className="cursor-pointer inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
+                  >
+                    {analysisLoading ? 'Analyzing Document...' : 'Choose PDF for Analysis'}
+                  </label>
+                  <p className="mt-2 text-sm text-gray-600">Select a PDF to analyze its content</p>
+                </div>
+
+                {/* Analysis Results */}
                 {analysis && (
-                  <div className="mt-4 space-y-4">
-                    <div className="border rounded p-4">
-                      <h3 className="font-medium">Summary</h3>
-                      <p className="mt-2">{analysis.summary}</p>
-                    </div>
-                    <div className="border rounded p-4">
-                      <h3 className="font-medium">Key Points</h3>
-                      <ul className="mt-2 list-disc pl-4">
-                        {analysis.key_points.map((point, index) => (
-                          <li key={index}>{point}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="border rounded p-4">
-                      <h3 className="font-medium">Topics</h3>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {analysis.topics.map((topic, index) => (
-                          <span key={index} className="bg-gray-100 px-2 py-1 rounded">
-                            {topic}
-                          </span>
-                        ))}
+                  <div className="space-y-6">
+                    {/* Abstract Section */}
+                    <div className="bg-white rounded-lg shadow-sm p-6 border">
+                      <div className="flex items-center mb-4">
+                        <BookText className="w-6 h-6 text-blue-600 mr-2" />
+                        <h3 className="text-xl font-semibold">Abstract Suggestion</h3>
                       </div>
+                      <p className="text-gray-700 leading-relaxed">
+                        {analysis.abstract.content}
+                      </p>
                     </div>
+
+                    {/* Chapter Suggestions */}
+                    {analysis.chapterSuggestions && analysis.chapterSuggestions.length > 0 && (
+                      <div className="bg-white rounded-lg shadow-sm p-6 border">
+                        <div className="flex items-center mb-4">
+                          <Book className="w-6 h-6 text-green-600 mr-2" />
+                          <h3 className="text-xl font-semibold">Chapter Structure Suggestions</h3>
+                        </div>
+                        <div className="space-y-4">
+                          {analysis.chapterSuggestions.map((chapter, index) => (
+                            <div key={index} className="border-l-4 border-green-500 pl-4">
+                              <h4 className="font-medium text-lg">{chapter.title}</h4>
+                              <ul className="mt-2 space-y-1">
+                                {chapter.keyPoints.map((point, idx) => (
+                                  <li key={idx} className="text-gray-600">• {point}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Study Questions */}
+                    {analysis.studyQuestions && analysis.studyQuestions.length > 0 && (
+                      <div className="bg-white rounded-lg shadow-sm p-6 border">
+                        <div className="flex items-center mb-4">
+                          <HelpCircle className="w-6 h-6 text-purple-600 mr-2" />
+                          <h3 className="text-xl font-semibold">Study Questions</h3>
+                        </div>
+                        <div className="space-y-4">
+                          {analysis.studyQuestions.map((item, index) => (
+                            <div key={index} className="border-l-4 border-purple-500 pl-4">
+                              <div className="flex items-center">
+                                <span className="text-sm font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                                  {item.type}
+                                </span>
+                              </div>
+                              <p className="font-medium mt-2">{item.question}</p>
+                              <p className="text-gray-600 mt-1">
+                                <span className="font-medium">Suggested Focus:</span> {item.suggestedAnswer}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Key Insights */}
+                    {analysis.keyInsights && analysis.keyInsights.length > 0 && (
+                      <div className="bg-white rounded-lg shadow-sm p-6 border">
+                        <div className="flex items-center mb-4">
+                          <List className="w-6 h-6 text-orange-600 mr-2" />
+                          <h3 className="text-xl font-semibold">Key Insights</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {analysis.keyInsights.map((insight, index) => (
+                            <div
+                              key={index}
+                              className="bg-orange-50 p-4 rounded-lg border border-orange-100"
+                            >
+                              <p className="text-gray-800">{insight}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

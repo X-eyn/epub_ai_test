@@ -106,28 +106,132 @@ class ContentAnalyzer:
     def __init__(self):
         self.client = client
     
-    def generate_summary(self, text: str) -> Dict:
-        """Generate summary and key points from text"""
+    # The method name needs to match what we're calling
+    def analyze_content(self, text: str) -> Dict:  # Changed from generate_summary
+        """Generate comprehensive analysis of the text"""
         try:
-            prompt = """Analyze the following text and provide:
-            1. A concise summary (max 3 paragraphs)
-            2. Key points (max 5)
-            3. Main topics covered
+            prompt = f"""Analyze this text and provide a detailed structured analysis.
+
+            Text to analyze:
+            {text}
+
+            Provide a comprehensive analysis in this exact JSON format:
+            {{
+                "abstract": {{
+                    "title": "Document Analysis",
+                    "content": "Write a 2-3 paragraph summary of the main content and purpose of this document"
+                }},
+                "chapterSuggestions": [
+                    {{
+                        "title": "Suggest a relevant chapter title based on the content",
+                        "keyPoints": ["Key point 1 from this section", "Key point 2 from this section"]
+                    }}
+                ],
+                "studyQuestions": [
+                    {{
+                        "question": "Write a specific question about this document's content",
+                        "type": "Conceptual/Technical/Analytical",
+                        "suggestedAnswer": "Provide relevant answer points based on the document"
+                    }}
+                ],
+                "keyInsights": [
+                    "List specific, concrete insights from this document",
+                    "Focus on actual content rather than generic points"
+                ]
+            }}
             
-            Format as JSON with keys: 'summary', 'key_points', 'topics'
-            
-            Text: """ + text
-            
+            Important: Base all analysis strictly on the actual content of the provided text."""
+
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={ "type": "json_object" }
+                messages=[{
+                    "role": "user", 
+                    "content": prompt
+                }],
+                response_format={ "type": "json_object" },
+                temperature=0.7
             )
             
-            return json.loads(response.choices[0].message.content)
+            result = json.loads(response.choices[0].message.content)
+            print("Analysis result:", result)  # Debug print
+            return result
         except Exception as e:
-            raise Exception(f"Error generating summary: {str(e)}")
+            print(f"Error in content analysis: {str(e)}")
+            return {
+                "abstract": {
+                    "title": "Error in Analysis",
+                    "content": "Could not analyze the document content."
+                },
+                "chapterSuggestions": [],
+                "studyQuestions": [],
+                "keyInsights": []
+            } 
+            
+def generate_summary(self, text: str) -> Dict:
+    """Generate comprehensive analysis of the text"""
+    try:
+        # Truncate text if too long, but keep enough for good analysis
+        max_length = 4000  # Adjust based on your needs
+        text_for_analysis = text[:max_length]
+        
+        prompt = f"""Analyze this text and provide a detailed structured analysis.
 
+        Text to analyze:
+        {text_for_analysis}
+
+        Provide a comprehensive analysis in this exact JSON format:
+        {{
+            "abstract": {{
+                "title": "Document Analysis",
+                "content": "Write a 2-3 paragraph summary of the main content and purpose of this document"
+            }},
+            "chapterSuggestions": [
+                {{
+                    "title": "Suggest a relevant chapter title based on the content",
+                    "keyPoints": ["Key point 1 from this section", "Key point 2 from this section"]
+                }}
+            ],
+            "studyQuestions": [
+                {{
+                    "question": "Write a specific question about this document's content",
+                    "type": "Conceptual/Technical/Analytical",
+                    "suggestedAnswer": "Provide relevant answer points based on the document"
+                }}
+            ],
+            "keyInsights": [
+                "List specific, concrete insights from this document",
+                "Focus on actual content rather than generic points"
+            ]
+        }}
+        
+        Important: Base all analysis strictly on the actual content of the provided text.
+        Be specific and reference actual content rather than making generic statements."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user", 
+                "content": prompt
+            }],
+            response_format={ "type": "json_object" },
+            temperature=0.7,
+            max_tokens=2000  # Adjust based on your needs
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        print("Analysis result:", result)  # Debug print
+        return result
+    except Exception as e:
+        print(f"Error in content analysis: {str(e)}")
+        return {
+            "abstract": {
+                "title": "Error in Analysis",
+                "content": "Could not analyze the document content."
+            },
+            "chapterSuggestions": [],
+            "studyQuestions": [],
+            "keyInsights": []
+        }               
 @app.get("/")
 async def root():
     return {
@@ -193,14 +297,17 @@ async def generate_mcqs(file: UploadFile = File(...), num_questions: int = 5):
 @app.post("/analyze-content")
 async def analyze_content(file: UploadFile = File(...)):
     try:
+        # First extract text from PDF
         processor = PDFProcessor()
         text = processor.extract_text(file)
         
+        # Then analyze the extracted text
         analyzer = ContentAnalyzer()
-        analysis = analyzer.generate_summary(text)
+        analysis = analyzer.analyze_content(text)  # Changed from generate_summary to analyze_content
         
         return analysis
     except Exception as e:
+        print(f"Error analyzing content: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={
