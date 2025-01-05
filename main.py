@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PyPDF2 import PdfReader
@@ -8,11 +8,10 @@ from openai import OpenAI
 import chromadb
 from typing import List, Dict
 import json
-from openai.types import Completion
-import tiktoken
 from datetime import datetime
-import magic  # For file type detection
-import langdetect  # For language detection
+import magic
+import langdetect
+import tiktoken
 
 # Load environment variables
 load_dotenv()
@@ -44,10 +43,11 @@ class TokenTracker:
         self.total_tokens = 0
         self.total_cost = 0.0
         self.log_file = "token_cost_log.json"
-        self.summary_file = "usage_summary.json"  # New file for summarized data
+        self.summary_file = "usage_summary.json"
         self.pricing = {
             "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
-            "gpt-4o": {"input": 0.005, "output": 0.015}
+            "gpt-4o": {"input": 0.005, "output": 0.015},
+            "input_processing": {"input": 0.0, "output": 0.0}  # Added for file processing
         }
 
     def update_usage(self, model: str, input_tokens: int, output_tokens: int, file_name: str = "", input_text: str = "", file_size: int = 0):
@@ -96,7 +96,18 @@ class TokenTracker:
         )
 
         # Update summary data
-        self.update_summary(file_name, file_type, file_extension, word_count, char_count, total_cost, model, input_tokens, output_tokens, detected_language)
+        self.update_summary(
+            file_name,
+            file_type,
+            file_extension,
+            word_count,
+            char_count,
+            total_cost,
+            model,
+            input_tokens,
+            output_tokens,
+            detected_language
+        )
 
     def get_usage_summary(self):
         """Returns the summarized usage data along with detailed logs."""
@@ -185,16 +196,15 @@ def get_token_count(text: str, model: str) -> int:
     encoding = tiktoken.encoding_for_model(model)
     num_tokens = len(encoding.encode(text))
     return num_tokens
-# --- End Token & Cost Estimation ---
 
 class PDFProcessor:
     def __init__(self):
         self.chunks = []
     
-    def extract_text(self, pdf_file: UploadFile) -> str:
+    def extract_text(self, file: UploadFile) -> str:
         """Extract text from uploaded PDF"""
         try:
-            pdf = PdfReader(pdf_file.file)
+            pdf = PdfReader(file.file)
             text = ""
             for page in pdf.pages:
                 text += page.extract_text()
@@ -233,10 +243,9 @@ class MCQGenerator:
     
     def generate_mcqs(self, text: str, num_questions: int = 5) -> List[Dict]:
         """Generate MCQs from text using OpenAI API"""
-        model = "gpt-4o" # Use 4o for better JSON
-        file_name = "unknown"  # Default filename
+        model = "gpt-4o"
+        file_name = "unknown"
         try:
-            # Check if the text is a file path and update file_name accordingly
             if os.path.isfile(text):
                 file_name = os.path.basename(text)
                 with open(text, 'r', encoding='utf-8') as f:
@@ -253,7 +262,6 @@ class MCQGenerator:
             
             Text: {text}"""
             
-            # Estimate prompt tokens
             prompt_tokens = get_token_count(prompt, model)
 
             response = self.client.chat.completions.create(
@@ -265,7 +273,6 @@ class MCQGenerator:
             response_content = response.choices[0].message.content
             response_tokens = get_token_count(response_content, model)
 
-            # Update token usage
             token_tracker.update_usage(
                 model, 
                 prompt_tokens, 
@@ -285,9 +292,8 @@ class ContentAnalyzer:
 
     def analyze_content(self, text: str, file_name: str) -> Dict:
         """Generate comprehensive analysis of the text"""
-        model = "gpt-4o"  # Specify the model here
+        model = "gpt-4o"
         try:
-            # Check if the text is a file path and update file_name accordingly
             if os.path.isfile(text):
                 file_name = os.path.basename(text)
                 with open(text, 'r', encoding='utf-8') as f:
@@ -325,15 +331,11 @@ class ContentAnalyzer:
             
             Important: Base all analysis strictly on the actual content of the provided text."""
 
-            # Estimate prompt tokens
             prompt_tokens = get_token_count(prompt, model)
 
             response = self.client.chat.completions.create(
                 model=model,
-                messages=[{
-                    "role": "user", 
-                    "content": prompt
-                }],
+                messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" },
                 temperature=0.7
             )
@@ -341,7 +343,6 @@ class ContentAnalyzer:
             response_content = response.choices[0].message.content
             response_tokens = get_token_count(response_content, model)
 
-            # Update token usage with file details
             token_tracker.update_usage(
                 model, 
                 prompt_tokens, 
@@ -350,19 +351,17 @@ class ContentAnalyzer:
                 input_text=text
             )
 
-            result = json.loads(response_content)
-            return result
+            return json.loads(response_content)
         except Exception as e:
             print(f"Error in content analysis: {str(e)}")
-            # Return a structured error response
             return {
                 "error": {
                     "message": "Error in content analysis",
                     "detail": str(e)
                 }
             }
-            
 
+# API Endpoints
 @app.get("/")
 async def root():
     return {
@@ -382,7 +381,11 @@ async def upload_pdf(file: UploadFile = File(...)):
     try:
         # Create a temporary file to store the uploaded file
         with open(file.filename, "wb") as buffer:
-            buffer.write(await file.read())
+            content = await file.read()
+            buffer.write(content)
+            
+        # Reset file pointer for PDF processing
+        file.file.seek(0)
         
         processor = PDFProcessor()
         text = processor.extract_text(file)
@@ -398,23 +401,34 @@ async def upload_pdf(file: UploadFile = File(...)):
 
         # Get file stats
         file_size = os.path.getsize(file.filename)
-
-        # Pass file details to TokenTracker (if applicable)
+        
+        # Update token tracker with minimal token counting
+        input_tokens = len(text.split())  # Simple word count as token estimate
         token_tracker.update_usage(
-            model="input_processing",  # You can define a model name for input
-            input_tokens=get_token_count(text, "gpt-4o"),  # Estimate tokens for input
-            output_tokens=0,  # No output tokens for just uploading
+            model="input_processing",
+            input_tokens=input_tokens,
+            output_tokens=0,
             file_name=file.filename,
             input_text=text,
             file_size=file_size
         )
         
+        # Clean up the temporary file
+        os.remove(file.filename)
+        
         return {
             "message": "PDF processed successfully",
             "num_chunks": len(chunks),
-            "filename": file.filename
+            "filename": file.filename,
+            "file_size_bytes": file_size,
+            "estimated_tokens": input_tokens
         }
+        
     except Exception as e:
+        # Clean up the temporary file if it exists
+        if os.path.exists(file.filename):
+            os.remove(file.filename)
+            
         print(f"Error processing PDF: {str(e)}")  # Server-side logging
         return JSONResponse(
             status_code=500,
@@ -427,14 +441,29 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/generate-mcqs")
 async def generate_mcqs(file: UploadFile = File(...), num_questions: int = 5):
     try:
+        # Create a temporary file and process it
+        with open(file.filename, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Reset file pointer for PDF processing
+        file.file.seek(0)
+        
         processor = PDFProcessor()
         text = processor.extract_text(file)
         
         mcq_gen = MCQGenerator()
         mcqs = mcq_gen.generate_mcqs(text, num_questions)
         
+        # Clean up temporary file
+        os.remove(file.filename)
+        
         return {"mcqs": mcqs}
     except Exception as e:
+        # Clean up the temporary file if it exists
+        if os.path.exists(file.filename):
+            os.remove(file.filename)
+            
         return JSONResponse(
             status_code=500,
             content={
@@ -446,19 +475,30 @@ async def generate_mcqs(file: UploadFile = File(...), num_questions: int = 5):
 @app.post("/analyze-content")
 async def analyze_content(file: UploadFile = File(...)):
     try:
-        # First extract text from PDF
+        # Create a temporary file and process it
         with open(file.filename, "wb") as buffer:
-            buffer.write(await file.read())
+            content = await file.read()
+            buffer.write(content)
+            
+        # Reset file pointer for PDF processing
+        file.file.seek(0)
+        
         processor = PDFProcessor()
         text = processor.extract_text(file)
         
-        # Then analyze the extracted text
+        # Analyze the extracted text
         analyzer = ContentAnalyzer()
         analysis = analyzer.analyze_content(text, file_name=file.filename)
         
+        # Clean up temporary file
+        os.remove(file.filename)
+        
         return analysis
     except Exception as e:
-        print(f"Error analyzing content: {str(e)}")
+        # Clean up the temporary file if it exists
+        if os.path.exists(file.filename):
+            os.remove(file.filename)
+            
         return JSONResponse(
             status_code=500,
             content={
@@ -485,7 +525,6 @@ async def search(query: str, num_results: int = 3):
             }
         )
 
-# --- Updated Endpoint for Usage Summary with Details ---
 @app.get("/usage-summary")
 async def usage_summary():
     """Provides summarized usage information and detailed logs."""

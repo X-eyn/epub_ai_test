@@ -2,9 +2,9 @@
     "forexRate.pdf": {
         "file_type": "application/pdf",
         "file_extension": ".pdf",
-        "word_count": 1152,
-        "char_count": 7048,
-        "total_cost": 0.030484999999999998,
+        "word_count": 2304,
+        "char_count": 14096,
+        "total_cost": 0.044115,
         "usage_details": [
             {
                 "timestamp": "2025-01-05T13:07:21.147219",
@@ -12,6 +12,47 @@
                 "input_tokens": 1520,
                 "output_tokens": 525,
                 "cost": 0.015475,
+                "detected_language": "en"
+            },
+            {
+                "timestamp": "2025-01-05T13:24:14.644205",
+                "model": "input_processing",
+                "input_tokens": 576,
+                "output_tokens": 0,
+                "cost": 0.0,
+                "detected_language": "en"
+            },
+            {
+                "timestamp": "2025-01-05T13:25:49.736452",
+                "model": "gpt-4o",
+                "input_tokens": 1520,
+                "output_tokens": 402,
+                "cost": 0.01363,
+                "detected_language": "en"
+            }
+        ]
+    },
+    "unknown": {
+        "file_type": "",
+        "file_extension": "",
+        "word_count": 1152,
+        "char_count": 7048,
+        "total_cost": 0.025124999999999998,
+        "usage_details": [
+            {
+                "timestamp": "2025-01-05T13:24:57.064437",
+                "model": "gpt-4o",
+                "input_tokens": 1389,
+                "output_tokens": 240,
+                "cost": 0.010544999999999999,
+                "detected_language": "en"
+            },
+            {
+                "timestamp": "2025-01-05T13:25:26.697614",
+                "model": "gpt-4o",
+                "input_tokens": 1389,
+                "output_tokens": 509,
+                "cost": 0.01458,
                 "detected_language": "en"
             }
         ]
