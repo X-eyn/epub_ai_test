@@ -1,0 +1,19 @@
+{
+    "forexRate.pdf": {
+        "file_type": "application/pdf",
+        "file_extension": ".pdf",
+        "word_count": 1152,
+        "char_count": 7048,
+        "total_cost": 0.030484999999999998,
+        "usage_details": [
+            {
+                "timestamp": "2025-01-05T13:07:21.147219",
+                "model": "gpt-4o",
+                "input_tokens": 1520,
+                "output_tokens": 525,
+                "cost": 0.015475,
+                "detected_language": "en"
+            }
+        ]
+    }
+}

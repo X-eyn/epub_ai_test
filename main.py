@@ -44,6 +44,7 @@ class TokenTracker:
         self.total_tokens = 0
         self.total_cost = 0.0
         self.log_file = "token_cost_log.json"
+        self.summary_file = "usage_summary.json"  # New file for summarized data
         self.pricing = {
             "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
             "gpt-4o": {"input": 0.005, "output": 0.015}
@@ -78,7 +79,8 @@ class TokenTracker:
             detected_language = langdetect.detect(input_text)
         except Exception as e:
             print(f"Error detecting language: {e}")
-        
+
+        # Log usage (detailed log)
         self.log_usage(
             model,
             input_tokens,
@@ -93,13 +95,28 @@ class TokenTracker:
             detected_language
         )
 
+        # Update summary data
+        self.update_summary(file_name, file_type, file_extension, word_count, char_count, total_cost, model, input_tokens, output_tokens, detected_language)
+
     def get_usage_summary(self):
-        """Returns a summary of token usage and cost."""
+        """Returns the summarized usage data along with detailed logs."""
+        try:
+            with open(self.summary_file, "r") as f:
+                summary_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            summary_data = {}
+
+        try:
+            with open(self.log_file, "r") as f:
+                detailed_logs = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            detailed_logs = []
+
         return {
-            "total_tokens": self.total_tokens,
-            "total_cost": round(self.total_cost, 4),
+            "summary": summary_data,
+            "details": detailed_logs
         }
-    
+
     def log_usage(self, model: str, input_tokens: int, output_tokens: int, cost: float, file_name: str, file_type: str, file_extension: str, file_size: int, word_count: int, char_count: int, detected_language: str):
         """Logs usage details to a JSON file."""
         try:
@@ -117,7 +134,7 @@ class TokenTracker:
             "file_name": file_name,
             "file_type": file_type,
             "file_extension": file_extension,
-            "file_size_bytes": file_size,  # in bytes
+            "file_size_bytes": file_size,
             "word_count": word_count,
             "char_count": char_count,
             "detected_language": detected_language
@@ -125,6 +142,41 @@ class TokenTracker:
 
         with open(self.log_file, "w") as f:
             json.dump(logs, f, indent=4)
+
+    def update_summary(self, file_name: str, file_type: str, file_extension: str, word_count: int, char_count: int, cost: float, model: str, input_tokens: int, output_tokens: int, detected_language: str):
+        """Updates the summarized usage data JSON file."""
+        try:
+            with open(self.summary_file, "r") as f:
+                summary_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            summary_data = {}
+
+        if file_name not in summary_data:
+            summary_data[file_name] = {
+                "file_type": file_type,
+                "file_extension": file_extension,
+                "word_count": word_count,
+                "char_count": char_count,
+                "total_cost": cost,
+                "usage_details": []
+            }
+        else:
+            summary_data[file_name]["word_count"] += word_count
+            summary_data[file_name]["char_count"] += char_count
+            summary_data[file_name]["total_cost"] += cost
+
+        # Add usage details to the summary
+        summary_data[file_name]["usage_details"].append({
+            "timestamp": datetime.now().isoformat(),
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost": cost,
+            "detected_language": detected_language
+        })
+
+        with open(self.summary_file, "w") as f:
+            json.dump(summary_data, f, indent=4)
 
 token_tracker = TokenTracker()
 
@@ -231,10 +283,9 @@ class ContentAnalyzer:
     def __init__(self):
         self.client = client
 
-    def analyze_content(self, text: str) -> Dict:
+    def analyze_content(self, text: str, file_name: str) -> Dict:
         """Generate comprehensive analysis of the text"""
         model = "gpt-4o"  # Specify the model here
-        file_name = "unknown"  # Default filename
         try:
             # Check if the text is a file path and update file_name accordingly
             if os.path.isfile(text):
@@ -396,12 +447,14 @@ async def generate_mcqs(file: UploadFile = File(...), num_questions: int = 5):
 async def analyze_content(file: UploadFile = File(...)):
     try:
         # First extract text from PDF
+        with open(file.filename, "wb") as buffer:
+            buffer.write(await file.read())
         processor = PDFProcessor()
         text = processor.extract_text(file)
         
         # Then analyze the extracted text
         analyzer = ContentAnalyzer()
-        analysis = analyzer.analyze_content(text)
+        analysis = analyzer.analyze_content(text, file_name=file.filename)
         
         return analysis
     except Exception as e:
@@ -435,13 +488,8 @@ async def search(query: str, num_results: int = 3):
 # --- Updated Endpoint for Usage Summary with Details ---
 @app.get("/usage-summary")
 async def usage_summary():
-    """Provides detailed usage information from the token log."""
-    try:
-        with open(token_tracker.log_file, "r") as f:
-            logs = json.load(f)
-        return logs
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+    """Provides summarized usage information and detailed logs."""
+    return token_tracker.get_usage_summary()
 
 if __name__ == "__main__":
     import uvicorn

@@ -103,5 +103,33 @@
         "word_count": 50,
         "char_count": 1179,
         "detected_language": "zh-cn"
+    },
+    {
+        "timestamp": "2025-01-05T13:02:00.927868",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 494,
+        "cost": 0.015009999999999999,
+        "file_name": "forexRate.pdf",
+        "file_type": "application/pdf",
+        "file_extension": ".pdf",
+        "file_size_bytes": 0,
+        "word_count": 576,
+        "char_count": 3524,
+        "detected_language": "en"
+    },
+    {
+        "timestamp": "2025-01-05T13:07:21.145176",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 525,
+        "cost": 0.015475,
+        "file_name": "forexRate.pdf",
+        "file_type": "application/pdf",
+        "file_extension": ".pdf",
+        "file_size_bytes": 0,
+        "word_count": 576,
+        "char_count": 3524,
+        "detected_language": "en"
     }
 ]
