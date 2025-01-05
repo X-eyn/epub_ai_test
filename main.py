@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PyPDF2 import PdfReader
@@ -11,6 +11,8 @@ import json
 from openai.types import Completion
 import tiktoken
 from datetime import datetime
+import magic  # For file type detection
+import langdetect  # For language detection
 
 # Load environment variables
 load_dotenv()
@@ -41,14 +43,14 @@ class TokenTracker:
     def __init__(self):
         self.total_tokens = 0
         self.total_cost = 0.0
-        self.log_file = "token_cost_log.json"   
-        self.pricing = {  # Update with latest pricing
-            "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015}, # per 1k tokens
-            "gpt-4o": {"input": 0.005, "output": 0.015} # per 1k tokens
+        self.log_file = "token_cost_log.json"
+        self.pricing = {
+            "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
+            "gpt-4o": {"input": 0.005, "output": 0.015}
         }
 
-    def update_usage(self, model: str, input_tokens: int, output_tokens: int):
-        """Updates token usage and cost based on model and token counts."""
+    def update_usage(self, model: str, input_tokens: int, output_tokens: int, file_name: str = "", input_text: str = "", file_size: int = 0):
+        """Updates token usage, cost, and file details."""
         if model not in self.pricing:
             raise ValueError(f"Unknown model: {model}")
 
@@ -59,7 +61,37 @@ class TokenTracker:
         self.total_tokens += input_tokens + output_tokens
         self.total_cost += total_cost
 
-        self.log_usage(model, input_tokens, output_tokens, total_cost)
+        file_type = ""
+        file_extension = ""
+        if file_name:
+            try:
+                file_type = magic.from_file(file_name, mime=True)
+                file_extension = os.path.splitext(file_name)[1]
+            except Exception as e:
+                print(f"Error detecting file type/extension: {e}")
+
+        word_count = len(input_text.split())
+        char_count = len(input_text)
+
+        detected_language = ""
+        try:
+            detected_language = langdetect.detect(input_text)
+        except Exception as e:
+            print(f"Error detecting language: {e}")
+        
+        self.log_usage(
+            model,
+            input_tokens,
+            output_tokens,
+            total_cost,
+            file_name,
+            file_type,
+            file_extension,
+            file_size,
+            word_count,
+            char_count,
+            detected_language
+        )
 
     def get_usage_summary(self):
         """Returns a summary of token usage and cost."""
@@ -67,8 +99,8 @@ class TokenTracker:
             "total_tokens": self.total_tokens,
             "total_cost": round(self.total_cost, 4),
         }
-
-    def log_usage(self, model: str, input_tokens: int, output_tokens: int, cost: float):
+    
+    def log_usage(self, model: str, input_tokens: int, output_tokens: int, cost: float, file_name: str, file_type: str, file_extension: str, file_size: int, word_count: int, char_count: int, detected_language: str):
         """Logs usage details to a JSON file."""
         try:
             with open(self.log_file, "r") as f:
@@ -81,7 +113,14 @@ class TokenTracker:
             "model": model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
-            "cost": cost
+            "cost": cost,
+            "file_name": file_name,
+            "file_type": file_type,
+            "file_extension": file_extension,
+            "file_size_bytes": file_size,  # in bytes
+            "word_count": word_count,
+            "char_count": char_count,
+            "detected_language": detected_language
         })
 
         with open(self.log_file, "w") as f:
@@ -143,7 +182,14 @@ class MCQGenerator:
     def generate_mcqs(self, text: str, num_questions: int = 5) -> List[Dict]:
         """Generate MCQs from text using OpenAI API"""
         model = "gpt-4o" # Use 4o for better JSON
+        file_name = "unknown"  # Default filename
         try:
+            # Check if the text is a file path and update file_name accordingly
+            if os.path.isfile(text):
+                file_name = os.path.basename(text)
+                with open(text, 'r', encoding='utf-8') as f:
+                    text = f.read()
+
             prompt = f"""Generate {num_questions} multiple choice questions from the following text. 
             Format the response as a JSON array with each question having the following structure:
             {{
@@ -168,7 +214,13 @@ class MCQGenerator:
             response_tokens = get_token_count(response_content, model)
 
             # Update token usage
-            token_tracker.update_usage(model, prompt_tokens, response_tokens)
+            token_tracker.update_usage(
+                model, 
+                prompt_tokens, 
+                response_tokens, 
+                file_name=file_name, 
+                input_text=text
+            )
 
             mcqs = json.loads(response_content)
             return mcqs.get('questions', [])
@@ -178,12 +230,18 @@ class MCQGenerator:
 class ContentAnalyzer:
     def __init__(self):
         self.client = client
-    
-    # The method name needs to match what we're calling
-    def analyze_content(self, text: str) -> Dict:  # Changed from generate_summary
+
+    def analyze_content(self, text: str) -> Dict:
         """Generate comprehensive analysis of the text"""
         model = "gpt-4o"  # Specify the model here
+        file_name = "unknown"  # Default filename
         try:
+            # Check if the text is a file path and update file_name accordingly
+            if os.path.isfile(text):
+                file_name = os.path.basename(text)
+                with open(text, 'r', encoding='utf-8') as f:
+                    text = f.read()
+
             prompt = f"""Analyze this text and provide a detailed structured analysis.
 
             Text to analyze:
@@ -228,103 +286,32 @@ class ContentAnalyzer:
                 response_format={ "type": "json_object" },
                 temperature=0.7
             )
-            
+
             response_content = response.choices[0].message.content
             response_tokens = get_token_count(response_content, model)
 
-            # Update token usage
-            token_tracker.update_usage(model, prompt_tokens, response_tokens)
-            
+            # Update token usage with file details
+            token_tracker.update_usage(
+                model, 
+                prompt_tokens, 
+                response_tokens, 
+                file_name=file_name, 
+                input_text=text
+            )
+
             result = json.loads(response_content)
-            print("Analysis result:", result)  # Debug print
             return result
         except Exception as e:
             print(f"Error in content analysis: {str(e)}")
+            # Return a structured error response
             return {
-                "abstract": {
-                    "title": "Error in Analysis",
-                    "content": "Could not analyze the document content."
-                },
-                "chapterSuggestions": [],
-                "studyQuestions": [],
-                "keyInsights": []
-            } 
+                "error": {
+                    "message": "Error in content analysis",
+                    "detail": str(e)
+                }
+            }
             
-def generate_summary(self, text: str) -> Dict:
-    """Generate comprehensive analysis of the text"""
-    model = "gpt-4o"  # Specify the model here
-    try:
-        # Truncate text if too long, but keep enough for good analysis
-        max_length = 4000  # Adjust based on your needs
-        text_for_analysis = text[:max_length]
-        
-        prompt = f"""Analyze this text and provide a detailed structured analysis.
 
-        Text to analyze:
-        {text_for_analysis}
-
-        Provide a comprehensive analysis in this exact JSON format:
-        {{
-            "abstract": {{
-                "title": "Document Analysis",
-                "content": "Write a 2-3 paragraph summary of the main content and purpose of this document"
-            }},
-            "chapterSuggestions": [
-                {{
-                    "title": "Suggest a relevant chapter title based on the content",
-                    "keyPoints": ["Key point 1 from this section", "Key point 2 from this section"]
-                }}
-            ],
-            "studyQuestions": [
-                {{
-                    "question": "Write a specific question about this document's content",
-                    "type": "Conceptual/Technical/Analytical",
-                    "suggestedAnswer": "Provide relevant answer points based on the document"
-                }}
-            ],
-            "keyInsights": [
-                "List specific, concrete insights from this document",
-                "Focus on actual content rather than generic points"
-            ]
-        }}
-        
-        Important: Base all analysis strictly on the actual content of the provided text.
-        Be specific and reference actual content rather than making generic statements."""
-
-        # Estimate prompt tokens
-        prompt_tokens = get_token_count(prompt, model)
-
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=[{
-                "role": "user", 
-                "content": prompt
-            }],
-            response_format={ "type": "json_object" },
-            temperature=0.7,
-            max_tokens=2000  # Adjust based on your needs
-        )
-
-        response_content = response.choices[0].message.content
-        response_tokens = get_token_count(response_content, model)
-
-        # Update token usage
-        token_tracker.update_usage(model, prompt_tokens, response_tokens)
-        
-        result = json.loads(response_content)
-        print("Analysis result:", result)  # Debug print
-        return result
-    except Exception as e:
-        print(f"Error in content analysis: {str(e)}")
-        return {
-            "abstract": {
-                "title": "Error in Analysis",
-                "content": "Could not analyze the document content."
-            },
-            "chapterSuggestions": [],
-            "studyQuestions": [],
-            "keyInsights": []
-        }               
 @app.get("/")
 async def root():
     return {
@@ -335,13 +322,17 @@ async def root():
             "generate_mcqs": "/generate-mcqs",
             "analyze_content": "/analyze-content",
             "search": "/search",
-            "usage_summary": "/usage-summary" # New endpoint
+            "usage_summary": "/usage-summary"
         }
     }
 
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     try:
+        # Create a temporary file to store the uploaded file
+        with open(file.filename, "wb") as buffer:
+            buffer.write(await file.read())
+        
         processor = PDFProcessor()
         text = processor.extract_text(file)
         chunks = processor.chunk_text(text)
@@ -353,6 +344,19 @@ async def upload_pdf(file: UploadFile = File(...)):
                 metadatas=[{"source": file.filename, "chunk_id": i}],
                 ids=[f"{file.filename}_chunk_{i}"]
             )
+
+        # Get file stats
+        file_size = os.path.getsize(file.filename)
+
+        # Pass file details to TokenTracker (if applicable)
+        token_tracker.update_usage(
+            model="input_processing",  # You can define a model name for input
+            input_tokens=get_token_count(text, "gpt-4o"),  # Estimate tokens for input
+            output_tokens=0,  # No output tokens for just uploading
+            file_name=file.filename,
+            input_text=text,
+            file_size=file_size
+        )
         
         return {
             "message": "PDF processed successfully",
@@ -397,7 +401,7 @@ async def analyze_content(file: UploadFile = File(...)):
         
         # Then analyze the extracted text
         analyzer = ContentAnalyzer()
-        analysis = analyzer.analyze_content(text)  # Changed from generate_summary to analyze_content
+        analysis = analyzer.analyze_content(text)
         
         return analysis
     except Exception as e:
@@ -428,10 +432,16 @@ async def search(query: str, num_results: int = 3):
             }
         )
 
-# --- New Endpoint for Usage Summary ---
+# --- Updated Endpoint for Usage Summary with Details ---
 @app.get("/usage-summary")
 async def usage_summary():
-    return token_tracker.get_usage_summary()
+    """Provides detailed usage information from the token log."""
+    try:
+        with open(token_tracker.log_file, "r") as f:
+            logs = json.load(f)
+        return logs
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
 if __name__ == "__main__":
     import uvicorn

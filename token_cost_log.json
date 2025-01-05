@@ -54,5 +54,54 @@
         "input_tokens": 1520,
         "output_tokens": 675,
         "cost": 0.017725
+    },
+    {
+        "timestamp": "2025-01-05T10:56:36.549765",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 419,
+        "cost": 0.013885
+    },
+    {
+        "timestamp": "2025-01-05T11:37:55.327222",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 548,
+        "cost": 0.01582,
+        "file_name": "unknown",
+        "file_type": "",
+        "file_extension": "",
+        "file_size_bytes": 0,
+        "word_count": 576,
+        "char_count": 3524,
+        "detected_language": "en"
+    },
+    {
+        "timestamp": "2025-01-05T11:44:35.589592",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 416,
+        "cost": 0.01384,
+        "file_name": "unknown",
+        "file_type": "",
+        "file_extension": "",
+        "file_size_bytes": 0,
+        "word_count": 576,
+        "char_count": 3524,
+        "detected_language": "en"
+    },
+    {
+        "timestamp": "2025-01-05T11:55:15.050226",
+        "model": "gpt-4o",
+        "input_tokens": 993,
+        "output_tokens": 434,
+        "cost": 0.011474999999999999,
+        "file_name": "unknown",
+        "file_type": "",
+        "file_extension": "",
+        "file_size_bytes": 0,
+        "word_count": 50,
+        "char_count": 1179,
+        "detected_language": "zh-cn"
     }
 ]
