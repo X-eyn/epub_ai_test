@@ -1,0 +1,58 @@
+[
+    {
+        "timestamp": "2025-01-05T10:02:51.560652",
+        "model": "gpt-4o",
+        "input_tokens": 1389,
+        "output_tokens": 92,
+        "cost": 0.008324999999999999
+    },
+    {
+        "timestamp": "2025-01-05T10:03:00.628399",
+        "model": "gpt-4o",
+        "input_tokens": 1389,
+        "output_tokens": 116,
+        "cost": 0.008685
+    },
+    {
+        "timestamp": "2025-01-05T10:03:48.996702",
+        "model": "gpt-4o",
+        "input_tokens": 1389,
+        "output_tokens": 506,
+        "cost": 0.014535
+    },
+    {
+        "timestamp": "2025-01-05T10:04:44.377665",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 417,
+        "cost": 0.013855
+    },
+    {
+        "timestamp": "2025-01-05T10:27:52.010753",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 416,
+        "cost": 0.01384
+    },
+    {
+        "timestamp": "2025-01-05T10:28:27.849317",
+        "model": "gpt-4o",
+        "input_tokens": 1389,
+        "output_tokens": 502,
+        "cost": 0.014474999999999998
+    },
+    {
+        "timestamp": "2025-01-05T10:29:15.989228",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 522,
+        "cost": 0.01543
+    },
+    {
+        "timestamp": "2025-01-05T10:35:17.494283",
+        "model": "gpt-4o",
+        "input_tokens": 1520,
+        "output_tokens": 675,
+        "cost": 0.017725
+    }
+]

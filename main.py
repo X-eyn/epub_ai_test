@@ -8,6 +8,9 @@ from openai import OpenAI
 import chromadb
 from typing import List, Dict
 import json
+from openai.types import Completion
+import tiktoken
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -32,6 +35,66 @@ client = OpenAI(
 # Initialize ChromaDB for vector storage
 chroma_client = chromadb.Client()
 collection = chroma_client.create_collection(name="pdf_content")
+
+# --- Token & Cost Estimation ---
+class TokenTracker:
+    def __init__(self):
+        self.total_tokens = 0
+        self.total_cost = 0.0
+        self.log_file = "token_cost_log.json"   
+        self.pricing = {  # Update with latest pricing
+            "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015}, # per 1k tokens
+            "gpt-4o": {"input": 0.005, "output": 0.015} # per 1k tokens
+        }
+
+    def update_usage(self, model: str, input_tokens: int, output_tokens: int):
+        """Updates token usage and cost based on model and token counts."""
+        if model not in self.pricing:
+            raise ValueError(f"Unknown model: {model}")
+
+        input_cost = (input_tokens / 1000) * self.pricing[model]["input"]
+        output_cost = (output_tokens / 1000) * self.pricing[model]["output"]
+        total_cost = input_cost + output_cost
+
+        self.total_tokens += input_tokens + output_tokens
+        self.total_cost += total_cost
+
+        self.log_usage(model, input_tokens, output_tokens, total_cost)
+
+    def get_usage_summary(self):
+        """Returns a summary of token usage and cost."""
+        return {
+            "total_tokens": self.total_tokens,
+            "total_cost": round(self.total_cost, 4),
+        }
+
+    def log_usage(self, model: str, input_tokens: int, output_tokens: int, cost: float):
+        """Logs usage details to a JSON file."""
+        try:
+            with open(self.log_file, "r") as f:
+                logs = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logs = []
+
+        logs.append({
+            "timestamp": datetime.now().isoformat(),
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost": cost
+        })
+
+        with open(self.log_file, "w") as f:
+            json.dump(logs, f, indent=4)
+
+token_tracker = TokenTracker()
+
+def get_token_count(text: str, model: str) -> int:
+    """Returns the number of tokens in a text string."""
+    encoding = tiktoken.encoding_for_model(model)
+    num_tokens = len(encoding.encode(text))
+    return num_tokens
+# --- End Token & Cost Estimation ---
 
 class PDFProcessor:
     def __init__(self):
@@ -79,6 +142,7 @@ class MCQGenerator:
     
     def generate_mcqs(self, text: str, num_questions: int = 5) -> List[Dict]:
         """Generate MCQs from text using OpenAI API"""
+        model = "gpt-4o" # Use 4o for better JSON
         try:
             prompt = f"""Generate {num_questions} multiple choice questions from the following text. 
             Format the response as a JSON array with each question having the following structure:
@@ -91,13 +155,22 @@ class MCQGenerator:
             
             Text: {text}"""
             
+            # Estimate prompt tokens
+            prompt_tokens = get_token_count(prompt, model)
+
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
             
-            mcqs = json.loads(response.choices[0].message.content)
+            response_content = response.choices[0].message.content
+            response_tokens = get_token_count(response_content, model)
+
+            # Update token usage
+            token_tracker.update_usage(model, prompt_tokens, response_tokens)
+
+            mcqs = json.loads(response_content)
             return mcqs.get('questions', [])
         except Exception as e:
             raise Exception(f"Error generating MCQs: {str(e)}")
@@ -109,6 +182,7 @@ class ContentAnalyzer:
     # The method name needs to match what we're calling
     def analyze_content(self, text: str) -> Dict:  # Changed from generate_summary
         """Generate comprehensive analysis of the text"""
+        model = "gpt-4o"  # Specify the model here
         try:
             prompt = f"""Analyze this text and provide a detailed structured analysis.
 
@@ -142,8 +216,11 @@ class ContentAnalyzer:
             
             Important: Base all analysis strictly on the actual content of the provided text."""
 
+            # Estimate prompt tokens
+            prompt_tokens = get_token_count(prompt, model)
+
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=model,
                 messages=[{
                     "role": "user", 
                     "content": prompt
@@ -152,7 +229,13 @@ class ContentAnalyzer:
                 temperature=0.7
             )
             
-            result = json.loads(response.choices[0].message.content)
+            response_content = response.choices[0].message.content
+            response_tokens = get_token_count(response_content, model)
+
+            # Update token usage
+            token_tracker.update_usage(model, prompt_tokens, response_tokens)
+            
+            result = json.loads(response_content)
             print("Analysis result:", result)  # Debug print
             return result
         except Exception as e:
@@ -169,6 +252,7 @@ class ContentAnalyzer:
             
 def generate_summary(self, text: str) -> Dict:
     """Generate comprehensive analysis of the text"""
+    model = "gpt-4o"  # Specify the model here
     try:
         # Truncate text if too long, but keep enough for good analysis
         max_length = 4000  # Adjust based on your needs
@@ -207,8 +291,11 @@ def generate_summary(self, text: str) -> Dict:
         Important: Base all analysis strictly on the actual content of the provided text.
         Be specific and reference actual content rather than making generic statements."""
 
+        # Estimate prompt tokens
+        prompt_tokens = get_token_count(prompt, model)
+
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model=model,
             messages=[{
                 "role": "user", 
                 "content": prompt
@@ -217,8 +304,14 @@ def generate_summary(self, text: str) -> Dict:
             temperature=0.7,
             max_tokens=2000  # Adjust based on your needs
         )
+
+        response_content = response.choices[0].message.content
+        response_tokens = get_token_count(response_content, model)
+
+        # Update token usage
+        token_tracker.update_usage(model, prompt_tokens, response_tokens)
         
-        result = json.loads(response.choices[0].message.content)
+        result = json.loads(response_content)
         print("Analysis result:", result)  # Debug print
         return result
     except Exception as e:
@@ -241,7 +334,8 @@ async def root():
             "upload_pdf": "/upload-pdf",
             "generate_mcqs": "/generate-mcqs",
             "analyze_content": "/analyze-content",
-            "search": "/search"
+            "search": "/search",
+            "usage_summary": "/usage-summary" # New endpoint
         }
     }
 
@@ -333,6 +427,11 @@ async def search(query: str, num_results: int = 3):
                 "detail": str(e)
             }
         )
+
+# --- New Endpoint for Usage Summary ---
+@app.get("/usage-summary")
+async def usage_summary():
+    return token_tracker.get_usage_summary()
 
 if __name__ == "__main__":
     import uvicorn
