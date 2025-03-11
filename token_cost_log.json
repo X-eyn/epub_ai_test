@@ -187,5 +187,47 @@
         "word_count": 576,
         "char_count": 3524,
         "detected_language": "en"
+    },
+    {
+        "timestamp": "2025-03-11T11:56:20.412984",
+        "model": "input_processing",
+        "input_tokens": 41,
+        "output_tokens": 0,
+        "cost": 0.0,
+        "file_name": "doom.pdf",
+        "file_type": "application/pdf",
+        "file_extension": ".pdf",
+        "file_size_bytes": 6496651,
+        "word_count": 41,
+        "char_count": 268,
+        "detected_language": "en"
+    },
+    {
+        "timestamp": "2025-03-11T12:03:03.634913",
+        "model": "gpt-4o",
+        "input_tokens": 1411,
+        "output_tokens": 548,
+        "cost": 0.015275,
+        "file_name": "unknown",
+        "file_type": "",
+        "file_extension": "",
+        "file_size_bytes": 0,
+        "word_count": 576,
+        "char_count": 3524,
+        "detected_language": "en"
+    },
+    {
+        "timestamp": "2025-03-11T12:03:26.553182",
+        "model": "gpt-4o",
+        "input_tokens": 1545,
+        "output_tokens": 568,
+        "cost": 0.016245,
+        "file_name": "forexRate.pdf",
+        "file_type": "application/pdf",
+        "file_extension": ".pdf",
+        "file_size_bytes": 0,
+        "word_count": 576,
+        "char_count": 3524,
+        "detected_language": "en"
     }
 ]

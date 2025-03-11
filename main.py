@@ -193,7 +193,17 @@ token_tracker = TokenTracker()
 
 def get_token_count(text: str, model: str) -> int:
     """Returns the number of tokens in a text string."""
-    encoding = tiktoken.encoding_for_model(model)
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        # For newer models like gpt-4o that don't have automatic mapping
+        if model.startswith("gpt-4o"):
+            # Use cl100k_base encoding which is used by GPT-4 models
+            encoding = tiktoken.get_encoding("cl100k_base")
+        else:
+            # Default to cl100k_base for other unmapped models
+            encoding = tiktoken.get_encoding("cl100k_base")
+    
     num_tokens = len(encoding.encode(text))
     return num_tokens
 

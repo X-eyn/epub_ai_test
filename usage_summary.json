@@ -2,9 +2,9 @@
     "forexRate.pdf": {
         "file_type": "application/pdf",
         "file_extension": ".pdf",
-        "word_count": 2304,
-        "char_count": 14096,
-        "total_cost": 0.044115,
+        "word_count": 2880,
+        "char_count": 17620,
+        "total_cost": 0.06036,
         "usage_details": [
             {
                 "timestamp": "2025-01-05T13:07:21.147219",
@@ -29,15 +29,23 @@
                 "output_tokens": 402,
                 "cost": 0.01363,
                 "detected_language": "en"
+            },
+            {
+                "timestamp": "2025-03-11T12:03:26.562186",
+                "model": "gpt-4o",
+                "input_tokens": 1545,
+                "output_tokens": 568,
+                "cost": 0.016245,
+                "detected_language": "en"
             }
         ]
     },
     "unknown": {
         "file_type": "",
         "file_extension": "",
-        "word_count": 1152,
-        "char_count": 7048,
-        "total_cost": 0.025124999999999998,
+        "word_count": 1728,
+        "char_count": 10572,
+        "total_cost": 0.0404,
         "usage_details": [
             {
                 "timestamp": "2025-01-05T13:24:57.064437",
@@ -53,6 +61,31 @@
                 "input_tokens": 1389,
                 "output_tokens": 509,
                 "cost": 0.01458,
+                "detected_language": "en"
+            },
+            {
+                "timestamp": "2025-03-11T12:03:03.635822",
+                "model": "gpt-4o",
+                "input_tokens": 1411,
+                "output_tokens": 548,
+                "cost": 0.015275,
+                "detected_language": "en"
+            }
+        ]
+    },
+    "doom.pdf": {
+        "file_type": "application/pdf",
+        "file_extension": ".pdf",
+        "word_count": 41,
+        "char_count": 268,
+        "total_cost": 0.0,
+        "usage_details": [
+            {
+                "timestamp": "2025-03-11T11:56:20.414894",
+                "model": "input_processing",
+                "input_tokens": 41,
+                "output_tokens": 0,
+                "cost": 0.0,
                 "detected_language": "en"
             }
         ]
