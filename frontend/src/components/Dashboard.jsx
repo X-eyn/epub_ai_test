@@ -156,7 +156,7 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">EPub AI Assistant</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Personal Document Assistant</h1>
           <p className="mt-2 text-gray-600">
             Intelligent document analysis and learning tools
           </p>

@@ -16,6 +16,9 @@ import tiktoken
 # Load environment variables
 load_dotenv()
 
+import openai
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 # Initialize FastAPI app
 app = FastAPI()
 
